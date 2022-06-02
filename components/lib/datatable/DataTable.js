@@ -598,6 +598,42 @@ export const DataTable = React.forwardRef((props, ref) => {
             }
         }
     }
+	
+	const checkFrozenColumnDragAllowed = (currentTarget, column) => {
+		let columns = getColumns();				
+		let isSameColumn = (col1, col2) => (col1.props.columnKey || col2.props.columnKey) ? ObjectUtils.equals(col1.props, col2.props, 'columnKey') : ObjectUtils.equals(col1.props, col2.props, 'field');
+		let dragColIndex = columns.findIndex((child) => isSameColumn(child, draggedColumn.current));
+		let dropColIndex = columns.findIndex((child) => isSameColumn(child, column));
+		
+		const dropHeader = findParentHeader(currentTarget);
+		const dropHeaderOffset = DomHandler.getOffset(dropHeader);
+		const columnCenter = dropHeaderOffset.left + dropHeader.offsetWidth / 2;
+		let leftFrozen;
+		let rightFrozen;
+		if (event.pageX > columnCenter) {
+			if (dropColIndex < columns.length - 1) {
+				leftFrozen = columns[dropColIndex].props.frozen;
+				rightFrozen = columns[dropColIndex + 1].props.frozen;
+			} else {
+				leftFrozen = columns[dropColIndex].props.frozen;
+				rightFrozen = true;
+			}
+		} else {
+			if (dropColIndex > 0) {
+				leftFrozen = columns[dropColIndex - 1].props.frozen;
+				rightFrozen = columns[dropColIndex].props.frozen;
+			} else {
+				leftFrozen = true;
+				rightFrozen = columns[dropColIndex].props.frozen;
+			}
+		}
+		
+		if (leftFrozen && rightFrozen) {
+			return false;
+		}
+		
+		return true;
+	}
 
     const onColumnHeaderDragStart = (e) => {
         const { originalEvent: event, column } = e;
@@ -616,12 +652,17 @@ export const DataTable = React.forwardRef((props, ref) => {
     }
 
     const onColumnHeaderDragOver = (e) => {
-        const { originalEvent: event } = e;
+        const { originalEvent: event, column } = e;
         const dropHeader = findParentHeader(event.currentTarget);
         if (props.reorderableColumns && draggedColumnElement.current && dropHeader) {
             event.preventDefault();
 
             if (draggedColumnElement.current !== dropHeader) {
+				const dragAllowed = checkFrozenColumnDragAllowed(event.currentTarget, column);
+				if (!dragAllowed) {
+					dropHeader.style.background = '#ff9999';
+				}
+				
                 const containerOffset = DomHandler.getOffset(elementRef.current);
                 const dropHeaderOffset = DomHandler.getOffset(dropHeader);
                 const targetLeft = dropHeaderOffset.left - containerOffset.left;
@@ -649,6 +690,9 @@ export const DataTable = React.forwardRef((props, ref) => {
 
     const onColumnHeaderDragLeave = (e) => {
         const { originalEvent: event } = e;
+		
+		const dropHeader = findParentHeader(event.currentTarget);
+		dropHeader.style.background = null;
 
         if (props.reorderableColumns && draggedColumnElement.current) {
             event.preventDefault();
@@ -659,6 +703,9 @@ export const DataTable = React.forwardRef((props, ref) => {
 
     const onColumnHeaderDrop = (e) => {
         const { originalEvent: event, column } = e;
+		
+		const dropHeader = findParentHeader(event.currentTarget);
+		dropHeader.style.background = null;
 
         event.preventDefault();
         if (draggedColumnElement.current) {
@@ -667,7 +714,9 @@ export const DataTable = React.forwardRef((props, ref) => {
             let allowDrop = (dragIndex !== dropIndex);
             if (allowDrop && ((dropIndex - dragIndex === 1 && dropPosition.current === -1) || (dragIndex - dropIndex === 1 && dropPosition.current === 1))) {
                 allowDrop = false;
-            }
+            } else {
+				allowDrop = checkFrozenColumnDragAllowed(event.currentTarget, column);
+			}
 
             if (allowDrop) {
                 let columns = getColumns();
